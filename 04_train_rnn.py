@@ -9,6 +9,7 @@ import os
 ROOT_DIR_NAME = './data/'
 SERIES_DIR_NAME = './data/series/'
 Z_DIM = 32
+TOLERANCE = 1e-3
 
 
 def get_filelist(N):
@@ -49,23 +50,33 @@ def random_batch(filelist, batch_size):
 			done = new_data['done']
 
 
-
-			reward = np.expand_dims(reward, axis=1)
-			# reward = np.expand_dims(reward, axis=2)
+			# reward = np.expand_dims(reward, axis=1)
+			reward = np.expand_dims(reward, axis=2)
 			
-			done = np.expand_dims(done, axis=1)
-			# done = np.expand_dims(done, axis=2)
-			print(reward.shape)
+			# done = np.expand_dims(done, axis=1)
+			done = np.expand_dims(done, axis=2)
+			# print(reward.shape)
 			s = log_varS.shape
 
 			zS = muS + np.exp(log_varS/2.0) * np.random.randn(*s)
 			zB = muB + np.exp(log_varB/2.0) * np.random.randn(*s)
+
+
+			if(np.sum(np.abs(zS) < TOLERANCE) > 0 or np.sum(np.abs(zB) < TOLERANCE) > 0):
+				continue
+			if(np.sum(np.abs(log_varS) < TOLERANCE) > 0 or np.sum(np.abs(log_varB) < TOLERANCE) > 0):
+				continue
+			# if(np.sum(np.abs(zS) < TOLERANCE) > 0 or np.sum(np.abs(zB) < TOLERANCE) > 0):
+			# 	continue
+
 
 			z_listS.append(zS)
 			z_listB.append(zB)
 			action_list.append(action)
 			rew_list.append(reward)
 			done_list.append(done)
+
+
 		except:
 			pass
 
@@ -75,7 +86,7 @@ def random_batch(filelist, batch_size):
 	done_list = np.array(done_list)
 	action_list = np.array(action_list)
 
-	print(z_listB.shape, z_listS.shape, rew_list.shape, done_list.shape)
+
 	return z_listS, z_listB, action_list, rew_list, done_list
 
 
@@ -101,20 +112,26 @@ def main(args):
 		print('STEP ' + str(step)+'/'+str(steps))
 		zS, zB, action, rew ,done = random_batch(filelist, batch_size)
 
-		# print(zS[:, :-1, :].reshape(batch_size, -1, Z_DIM).shape)
-		# print(action[:, :-1, :].shape)
-		# print(rew[:, :-1, :].shape)
-		rnn_input = np.concatenate([zS[:, :-1, :].reshape(batch_size, -1, Z_DIM), action[:, :-1, :], rew[:, :-1, :]], axis = 2)
+		print(zS.shape)
+
+		new_batch_size = zS.shape[0]
+		# rnn_input = np.concatenate([zS[:, :-1, :].reshape(batch_size, -1, Z_DIM), action[:, :-1, :], rew[:, :-1, :]], axis = 2)
+		rnn_input = np.concatenate([zS[:, :-1, :].reshape(new_batch_size, -1, Z_DIM), action[:, :-1, :], rew[:, :-1, :]], axis = 2)
+
 		# print(rnn_input.shape)
-		rnn_output = np.concatenate([zB[:, 1:, :].reshape(batch_size, -1, Z_DIM), rew[:, 1:, :]], axis = 2) #, done[:, 1:, :]
+
+		print(rnn_input.shape)
+		# rnn_output = np.concatenate([zB[:, 1:, :].reshape(batch_size, -1, Z_DIM), rew[:, 1:, :]], axis = 2) #, done[:, 1:, :]
+		rnn_output = np.concatenate([zB[:, 1:, :].reshape(new_batch_size, -1, Z_DIM), rew[:, 1:, :]], axis = 2) #, done[:, 1:, :]
     
+		print(rnn_output.shape)
 		if step == 0:
 			np.savez_compressed(ROOT_DIR_NAME + 'rnn_files.npz', rnn_input = rnn_input, rnn_output = rnn_output)
     
 		rnn.train(rnn_input, rnn_output)
     
 		if step % 10 == 0:    
-			print(step)
+			# print(step)
 			rnn.model.save_weights('./rnn/weights.h5')
 
 	rnn.model.save_weights('./rnn/weights.h5')
@@ -132,3 +149,4 @@ if __name__ == "__main__":
 		args = parser.parse_args()
 
 		main(args)
+
